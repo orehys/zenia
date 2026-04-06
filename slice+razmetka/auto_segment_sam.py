@@ -473,6 +473,7 @@ def auto_segment_forest(images_dir, output_dir, checkpoint_path="sam_vit_h_4b893
         if use_slicing and w > 2000:  # Если ширина больше 2000 пикселей - используем slicing
             print(f"  ✂️  Режим разбиения на куски (use_slicing={use_slicing})")
             tree_contours = process_image_with_slicing(image, mask_generator, w, h)
+            forest_mask = None  # В режиме slicing маска леса не создается отдельно
         else:
             print(f"  🔄 Обычный режим обработки (use_slicing={use_slicing} или изображение небольшое)")
             # ЭТАП 1: Выделение зоны леса
@@ -547,7 +548,7 @@ def auto_segment_forest(images_dir, output_dir, checkpoint_path="sam_vit_h_4b893
         vis_image = image.copy()
         
         # Рисуем зону леса (полупрозрачный синий)
-        if forest_contour is not None:
+        if forest_mask is not None and forest_contour is not None:
             forest_overlay = vis_image.copy()
             cv2.drawContours(forest_overlay, [forest_contour], -1, (255, 0, 0), -1)
             cv2.addWeighted(forest_overlay, 0.3, vis_image, 0.7, 0, vis_image)
@@ -560,10 +561,16 @@ def auto_segment_forest(images_dir, output_dir, checkpoint_path="sam_vit_h_4b893
         
         cv2.imwrite(str(vis_path), vis_image)
         
-        # Сохраняем маску леса
-        mask_path = output_path / f"{img_path.stem}_forest_mask.png"
-        cv2.imwrite(str(mask_path), forest_mask)
-        del masks, tree_contours, forest_mask, image, image_rgb, image_hsv
+        # Сохраняем маску леса (только для обычного режима)
+        if forest_mask is not None:
+            mask_path = output_path / f"{img_path.stem}_forest_mask.png"
+            cv2.imwrite(str(mask_path), forest_mask)
+        
+        # Очищаем память
+        if use_slicing and w > 2000:
+            del tree_contours, image, image_rgb, image_hsv
+        else:
+            del masks, tree_contours, forest_mask, image, image_rgb, image_hsv
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
