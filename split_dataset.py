@@ -18,18 +18,35 @@ def split_dataset(dataset_path, val_ratio=0.2):
     
     # Получаем все изображения
     images = list(train_images.glob('*.JPG')) + list(train_images.glob('*.jpg'))
-    random.shuffle(images)
     
-    val_count = max(1, int(len(images) * val_ratio))  # Минимум 1 файл
-    val_images_list = images[:val_count]
+    # Фильтруем: оставляем только те, у которых есть разметка
+    images_with_labels = []
+    for img_path in images:
+        name = img_path.stem
+        label_path = train_labels / f"{name}.txt"
+        if label_path.exists():
+            images_with_labels.append(img_path)
+        else:
+            print(f"⚠️  Пропущено {name} - нет разметки")
     
-    print(f"📊 Всего изображений: {len(images)}")
-    print(f"📁 Train: {len(images) - val_count}")
+    random.shuffle(images_with_labels)
+    
+    val_count = max(1, int(len(images_with_labels) * val_ratio))  # Минимум 1 файл
+    val_images_list = images_with_labels[:val_count]
+    
+    print(f"📊 Всего изображений с разметкой: {len(images_with_labels)}")
+    print(f"📁 Train: {len(images_with_labels) - val_count}")
     print(f"📁 Val: {val_count}")
     
     # Перемещаем файлы
+    moved_count = 0
     for img_path in val_images_list:
         name = img_path.stem
+        
+        # Проверяем, существует ли ещё файл (на случай повторного запуска)
+        if not img_path.exists():
+            print(f"⚠️  Файл {img_path.name} уже перемещён, пропускаем")
+            continue
         
         # Изображение
         shutil.move(str(img_path), str(val_images / img_path.name))
@@ -38,8 +55,11 @@ def split_dataset(dataset_path, val_ratio=0.2):
         label_src = train_labels / f"{name}.txt"
         if label_src.exists():
             shutil.move(str(label_src), str(val_labels / f"{name}.txt"))
+            moved_count += 1
+        else:
+            print(f"⚠️  Разметка для {name} не найдена")
     
-    print("✅ Готово!")
+    print(f"✅ Готово! Перемещено пар файл-разметка: {moved_count}")
 
 if __name__ == '__main__':
     split_dataset('/Users/golcov/prog/kursach/forest_dataset', val_ratio=0.2)
